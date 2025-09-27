@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import Logo from './assets/logo.svg'
 import UploadArea from './components/UploadArea.jsx'
+import AvatarUpload from './components/AvatarUpload.jsx'
+import ChatAssistant from './components/ChatAssistant.jsx'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000'
 
@@ -15,15 +17,19 @@ const fetchJson = async (path, options = {}) => {
 
 const postJson = (path, body) =>
   fetchJson(path, { method: 'POST', body: JSON.stringify(body) })
+const putJson = (path, body) =>
+  fetchJson(path, { method: 'PUT', body: JSON.stringify(body) })
 
 function CivicFixApp() {
   const [currentView, setCurrentView] = useState('splash')
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [issues, setIssues] = useState([])
+  const [user, setUser] = useState({ fullName: '', email: '', phone: '', address: '', location: null, photoUrl: '' })
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
   const [selectedCategory, setSelectedCategory] = useState('')
   const [userPoints, setUserPoints] = useState(147)
+  const [chatOpen, setChatOpen] = useState(false)
 
   const [reportForm, setReportForm] = useState({
     title: '',
@@ -64,6 +70,14 @@ function CivicFixApp() {
     if (!isLoggedIn) return
     fetchJson('/issues').then(setIssues).catch(() => {})
   }, [isLoggedIn])
+
+  useEffect(() => {
+    const cached = localStorage.getItem('civicfix:user')
+    if (cached) {
+      try { setUser(JSON.parse(cached)) } catch {}
+    }
+    fetchJson('/me').then((u) => { setUser(u); localStorage.setItem('civicfix:user', JSON.stringify(u)) }).catch(() => {})
+  }, [])
 
   const filteredIssues = useMemo(() => {
     return issues.filter((issue) => {
@@ -120,18 +134,51 @@ function CivicFixApp() {
   )
 
   const renderLogin = () => (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-400 via-blue-500 to-purple-600 flex items-center justify-center p-4">
-      <div className="bg-white/95 rounded-3xl shadow-2xl w-full max-w-sm p-6">
-        <div className="text-center mb-6">
-          <div className="bg-gradient-to-br from-emerald-500 to-purple-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-3">
-            <span className="text-white text-xl">🏛️</span>
+    <div className="min-h-screen relative overflow-hidden">
+      <div className="absolute inset-0 -z-10 animate-pulse">
+        <div className="absolute -top-10 -left-10 w-64 h-64 bg-emerald-400/30 blur-3xl rounded-full" />
+        <div className="absolute top-1/3 -right-10 w-80 h-80 bg-blue-400/30 blur-3xl rounded-full" />
+        <div className="absolute bottom-0 left-1/4 w-72 h-72 bg-purple-400/30 blur-3xl rounded-full" />
+      </div>
+      <div className="min-h-screen bg-gradient-to-br from-emerald-400/40 via-blue-500/40 to-purple-600/40 flex items-center justify-center p-4">
+        <div className="bg-white/95 rounded-3xl shadow-2xl w-full max-w-sm p-6">
+          <div className="text-center mb-6">
+            <div className="bg-gradient-to-br from-emerald-500 to-purple-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <span className="text-white text-xl">🏛️</span>
+            </div>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-purple-600 bg-clip-text text-transparent">Welcome</h1>
+            <p className="text-gray-600 text-sm">Continue making your city better</p>
           </div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-purple-600 bg-clip-text text-transparent">Welcome</h1>
-          <p className="text-gray-600 text-sm">Continue making your city better</p>
+
+          <div className="mb-4"><AvatarUpload value={user.photoUrl} onChange={(photoUrl) => setUser((u) => ({ ...u, photoUrl }))} /></div>
+          <div className="space-y-2 mb-4">
+            <input value={user.fullName} onChange={(e) => setUser((u) => ({ ...u, fullName: e.target.value }))} placeholder="Full Name" className="w-full border-2 border-gray-200 rounded-xl px-3 py-3" />
+            <input value={user.address} onChange={(e) => setUser((u) => ({ ...u, address: e.target.value }))} placeholder="Address" className="w-full border-2 border-gray-200 rounded-xl px-3 py-3" />
+          </div>
+          <div className="space-y-2 mb-4">
+            <button onClick={() => { /* email flow placeholder */ }} className="w-full bg-white border-2 border-gray-200 text-gray-700 py-3 px-4 rounded-xl font-medium">📧 Continue with Email</button>
+            <button onClick={() => { /* phone flow placeholder */ }} className="w-full bg-white border-2 border-gray-200 text-gray-700 py-3 px-4 rounded-xl font-medium">📱 Continue with Phone</button>
+          </div>
+          <div className="space-y-2 mb-4">
+            <button onClick={async () => {
+              if (!navigator.geolocation) return
+              navigator.geolocation.getCurrentPosition(async (pos) => {
+                const location = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }
+                setUser((u) => ({ ...u, location }))
+              })
+            }} className="w-full bg-white border-2 border-gray-200 text-gray-700 py-3 px-4 rounded-xl font-medium">📍 Share Live Location</button>
+            <div className="text-xs text-gray-600">{user.location ? `Lat: ${user.location.lat.toFixed(4)}, Lng: ${user.location.lng.toFixed(4)}` : 'Location not set'}</div>
+          </div>
+
+          <button onClick={async () => {
+            try {
+              const saved = await putJson('/me', user)
+              localStorage.setItem('civicfix:user', JSON.stringify(saved))
+              setIsLoggedIn(true)
+              setCurrentView('home')
+            } catch {}
+          }} className="w-full bg-gradient-to-r from-emerald-500 via-blue-500 to-purple-600 text-white py-4 px-4 rounded-2xl font-medium">Enter CivicFix</button>
         </div>
-        <button onClick={() => { setIsLoggedIn(true); setCurrentView('home') }} className="w-full bg-gradient-to-r from-emerald-500 via-blue-500 to-purple-600 text-white py-4 px-4 rounded-2xl font-medium">
-          Enter CivicFix
-        </button>
       </div>
     </div>
   )
@@ -148,6 +195,14 @@ function CivicFixApp() {
               <h1 className="text-xl font-bold text-gray-800">Good day!</h1>
               <p className="text-sm text-gray-600">Airoli, Mumbai</p>
             </div>
+          </div>
+          <div className="flex items-center space-x-3">
+            <button className="bg-gray-100 rounded-full p-2" onClick={() => setCurrentView('notifications')}>🔔</button>
+            <button onClick={() => setCurrentView('profile')} className="bg-gray-100 rounded-full p-1">
+              <div className="w-8 h-8 rounded-full overflow-hidden">
+                {user.photoUrl ? <img src={user.photoUrl} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center">☰</div>}
+              </div>
+            </button>
           </div>
         </div>
         <div className="bg-gradient-to-r from-emerald-500 to-blue-500 rounded-2xl p-4 text-white">
@@ -174,6 +229,10 @@ function CivicFixApp() {
           <button onClick={() => setCurrentView('nearby')} className="bg-gradient-to-br from-emerald-500 to-teal-500 text-white p-4 rounded-2xl flex flex-col items-center space-y-2">
             <div className="bg-white/20 rounded-full p-3">📍</div>
             <span className="font-semibold">Nearby Issues</span>
+          </button>
+          <button onClick={() => setChatOpen(true)} className="bg-gradient-to-br from-blue-500 to-indigo-500 text-white p-4 rounded-2xl flex flex-col items-center space-y-2">
+            <div className="bg-white/20 rounded-full p-3">💬</div>
+            <span className="font-semibold">Assistant</span>
           </button>
         </div>
       </div>
@@ -293,6 +352,50 @@ function CivicFixApp() {
     </div>
   )
 
+  const renderProfile = () => (
+    <div className="pb-20">
+      <div className="bg-white px-4 pt-12 pb-4 shadow-sm">
+        <div className="flex items-center space-x-3">
+          <button onClick={() => setCurrentView('home')} className="bg-gray-100 rounded-full p-2">←</button>
+          <div>
+            <h1 className="text-xl font-bold text-gray-800">My Profile</h1>
+            <p className="text-sm text-gray-600">Your information</p>
+          </div>
+        </div>
+      </div>
+      <div className="p-4 space-y-4">
+        <AvatarUpload value={user.photoUrl} onChange={(photoUrl) => setUser((u) => ({ ...u, photoUrl }))} />
+        <div className="grid grid-cols-1 gap-3">
+          <input value={user.fullName} onChange={(e)=>setUser((u)=>({...u, fullName: e.target.value}))} className="border rounded-xl px-3 py-3" placeholder="Full Name" />
+          <input value={user.address} onChange={(e)=>setUser((u)=>({...u, address: e.target.value}))} className="border rounded-xl px-3 py-3" placeholder="Address" />
+        </div>
+        <button onClick={async ()=>{ const saved = await putJson('/me', user); setUser(saved); localStorage.setItem('civicfix:user', JSON.stringify(saved)); }} className="w-full bg-blue-600 text-white rounded-xl py-3">Save</button>
+      </div>
+    </div>
+  )
+
+  const renderNotifications = () => (
+    <div className="pb-20">
+      <div className="bg-white px-4 pt-12 pb-4 shadow-sm">
+        <div className="flex items-center space-x-3">
+          <button onClick={() => setCurrentView('home')} className="bg-gray-100 rounded-full p-2">←</button>
+          <div>
+            <h1 className="text-xl font-bold text-gray-800">Notifications</h1>
+            <p className="text-sm text-gray-600">Your report progress</p>
+          </div>
+        </div>
+      </div>
+      <div className="p-4 space-y-3">
+        {issues.slice(0, 10).map((i) => (
+          <div key={i.id} className="bg-white border rounded-xl p-3">
+            <div className="font-medium">{i.title}</div>
+            <div className="text-xs text-gray-600">Status: {i.status} • Upvotes: {i.upvotes} • Comments: {i.comments}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+
   const renderBottomNav = () => (
     <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-2 max-w-md mx-auto">
       <div className="flex justify-around">
@@ -318,7 +421,10 @@ function CivicFixApp() {
       {isLoggedIn && currentView === 'home' && renderHome()}
       {isLoggedIn && currentView === 'report' && renderReport()}
       {isLoggedIn && currentView === 'nearby' && renderNearby()}
+      {isLoggedIn && currentView === 'profile' && renderProfile()}
+      {isLoggedIn && currentView === 'notifications' && renderNotifications()}
       {isLoggedIn && renderBottomNav()}
+      <ChatAssistant open={chatOpen} onClose={() => setChatOpen(false)} issues={issues} />
     </div>
   )
 }

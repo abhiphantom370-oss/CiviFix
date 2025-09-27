@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import { join, dirname } from 'path';
+import { existsSync, mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { Low } from 'lowdb';
 import { JSONFile } from 'lowdb/node';
@@ -19,12 +20,15 @@ app.use(express.json({ limit: '2mb' }));
 // LowDB setup
 const dbFile = join(__dirname, '../data/db.json');
 const adapter = new JSONFile(dbFile);
-const db = new Low(adapter, { issues: [], comments: [], users: [] });
+const db = new Low(adapter, { issues: [], comments: [], users: [], user: null });
 await db.read();
-db.data ||= { issues: [], comments: [], users: [] };
+db.data ||= { issues: [], comments: [], users: [], user: null };
 
 // Static uploads
 const uploadsDir = join(__dirname, '../uploads');
+if (!existsSync(uploadsDir)) {
+  mkdirSync(uploadsDir, { recursive: true });
+}
 app.use('/uploads', express.static(uploadsDir));
 
 // Multer setup
@@ -99,8 +103,43 @@ if (db.data.issues.length === 0) {
   await db.write();
 }
 
+// Ensure a default user object exists
+if (!db.data.user) {
+  db.data.user = {
+    id: 'me',
+    fullName: '',
+    email: '',
+    phone: '',
+    address: '',
+    location: null,
+    photoUrl: ''
+  };
+  await db.write();
+}
+
 // Routes
 app.get('/health', (req, res) => res.json({ ok: true }));
+
+// Profile endpoints
+app.get('/me', async (req, res) => {
+  await db.read();
+  res.json(db.data.user || {});
+});
+
+app.put('/me', async (req, res) => {
+  const { fullName, email, phone, address, location, photoUrl } = req.body || {};
+  await db.read();
+  const user = db.data.user || { id: 'me' };
+  if (typeof fullName === 'string') user.fullName = fullName;
+  if (typeof email === 'string') user.email = email;
+  if (typeof phone === 'string') user.phone = phone;
+  if (typeof address === 'string') user.address = address;
+  if (location) user.location = location;
+  if (typeof photoUrl === 'string') user.photoUrl = photoUrl;
+  db.data.user = user;
+  await db.write();
+  res.json(user);
+});
 
 // Issues CRUD
 app.get('/issues', async (req, res) => {
