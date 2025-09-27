@@ -99,10 +99,8 @@ app.post('/api/issues/:id/comments', (req, res) => {
   res.json({ issue });
 });
 
-// Fallback to index.html for SPA routes
-app.get('*', (req, res, next) => {
-  // If request looks like an API or upload, skip
-  if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) return next();
+// Fallback to index.html for SPA routes (Express 5 compatible)
+app.get(/^(?!\/(api|uploads)(\/|$)).*/, (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
 
