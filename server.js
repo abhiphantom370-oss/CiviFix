@@ -18,6 +18,7 @@ app.use(cors());
 app.use(express.json({ limit: '5mb' }));
 app.use('/uploads', express.static(UPLOADS_DIR));
 app.use(express.static(PUBLIC_DIR));
+app.use('/vendor', express.static(path.join(__dirname, 'node_modules')));
 
 // Multer storage for uploads
 const storage = multer.diskStorage({
