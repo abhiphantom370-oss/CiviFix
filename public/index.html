@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CivicFix</title>
+    <link rel="icon" href="/assets/icon.svg" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter','system-ui','sans-serif'] } } } }
+    </script>
+    <style>
+      html, body, #root { height: 100%; }
+      body { background: #f8fafc; }
+    </style>
+  </head>
+  <body class="bg-gray-50">
+    <div id="root"></div>
+
+    <script src="/vendor/react.development.js"></script>
+    <script src="/vendor/react-dom.development.js"></script>
+    <script src="/vendor/babel.min.js"></script>
+
+    <script type="text/babel" data-presets="react,env">
+      const { useEffect, useState } = React;
+
+      const categories = [
+        { id: 'roads', name: 'Roads & Transport', icon: '🛣️' },
+        { id: 'water', name: 'Water & Drainage', icon: '💧' },
+        { id: 'electricity', name: 'Street Lights', icon: '💡' },
+        { id: 'waste', name: 'Garbage Collection', icon: '🗑️' },
+        { id: 'safety', name: 'Public Safety', icon: '🚨' },
+        { id: 'parks', name: 'Parks & Recreation', icon: '🌳' },
+        { id: 'noise', name: 'Noise Pollution', icon: '🔊' },
+        { id: 'animals', name: 'Stray Animals', icon: '🐕' },
+        { id: 'environment', name: 'Environment', icon: '🌍' },
+        { id: 'building', name: 'Building Issues', icon: '🏢' },
+        { id: 'other', name: 'Other Issues', icon: '❓' }
+      ];
+
+      function App() {
+        const [issues, setIssues] = useState([]);
+        const [loading, setLoading] = useState(true);
+        const [error, setError] = useState('');
+        const [view, setView] = useState('home');
+
+        // form
+        const [title, setTitle] = useState('');
+        const [description, setDescription] = useState('');
+        const [category, setCategory] = useState('');
+        const [priority, setPriority] = useState('medium');
+        const [photoUrls, setPhotoUrls] = useState([]);
+        const [submitting, setSubmitting] = useState(false);
+
+        useEffect(() => {
+          const load = async () => {
+            try {
+              const res = await fetch('/api/issues');
+              const data = await res.json();
+              setIssues((data.issues || data) ?? []);
+            } catch (e) {
+              setError('Could not load issues');
+            } finally {
+              setLoading(false);
+            }
+          };
+          load();
+        }, []);
+
+        const handleFiles = async (fileList) => {
+          if (!fileList || fileList.length === 0) return;
+          const form = new FormData();
+          Array.from(fileList).forEach(f => form.append('photos', f));
+          try {
+            const res = await fetch('/api/uploads', { method: 'POST', body: form });
+            const data = await res.json();
+            const urls = data.urls || [];
+            setPhotoUrls(prev => [...prev, ...urls]);
+          } catch (e) {
+            // fallback to object URLs
+            const urls = Array.from(fileList).map(f => URL.createObjectURL(f));
+            setPhotoUrls(prev => [...prev, ...urls]);
+          }
+        };
+
+        const useLocation = () => new Promise((resolve) => {
+          if (!navigator.geolocation) return resolve(null);
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const { latitude, longitude } = pos.coords;
+              resolve({ lat: latitude, lng: longitude, address: `${latitude.toFixed(5)}, ${longitude.toFixed(5)}` });
+            },
+            () => resolve(null),
+            { enableHighAccuracy: true, timeout: 7000 }
+          );
+        });
+
+        const submit = async () => {
+          if (!title.trim() || !description.trim() || !category) return;
+          setSubmitting(true);
+          const location = await useLocation();
+          const payload = { title, description, category, priority, photos: photoUrls, location };
+          try {
+            const res = await fetch('/api/issues', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            const data = await res.json();
+            const created = data.issue || data;
+            setIssues(prev => [created, ...prev]);
+            setView('home');
+            setTitle(''); setDescription(''); setCategory(''); setPriority('medium'); setPhotoUrls([]);
+          } catch (e) {
+            alert('Submit failed');
+          } finally {
+            setSubmitting(false);
+          }
+        };
+
+        const upvote = async (id) => {
+          setIssues(prev => prev.map(i => i.id === id ? { ...i, upvotes: (i.upvotes||0)+1 } : i));
+          try { await fetch(`/api/issues/${id}/upvote`, { method: 'POST' }); } catch (e) {}
+        };
+
+        return (
+          <div className="min-h-screen pb-24">
+            <header className="bg-white border-b sticky top-0 z-10">
+              <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <img src="/assets/icon.svg" className="w-8 h-8" alt="icon" />
+                  <div>
+                    <div className="text-lg font-bold text-gray-800">CivicFix</div>
+                    <div className="text-xs text-gray-500">Empowering communities</div>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={()=>setView('home')} className={`px-3 py-1.5 rounded-lg text-sm ${view==='home'?'bg-gray-900 text-white':'bg-gray-100'}`}>Home</button>
+                  <button onClick={()=>setView('report')} className={`px-3 py-1.5 rounded-lg text-sm ${view==='report'?'bg-emerald-600 text-white':'bg-emerald-100 text-emerald-800'}`}>Report</button>
+                </div>
+              </div>
+            </header>
+
+            <main className="max-w-4xl mx-auto px-4 py-4">
+              {view==='home' && (
+                <div className="space-y-6">
+                  <div className="rounded-2xl p-6 bg-gradient-to-r from-emerald-500 to-blue-500 text-white">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-sm text-emerald-100">Welcome</div>
+                        <div className="text-2xl font-bold">Make your city better</div>
+                        <div className="text-sm text-emerald-100">Report issues, upvote, and track progress</div>
+                      </div>
+                      <img src="https://images.unsplash.com/photo-1519681393784-d120267933ba?w=300&q=60&auto=format&fit=crop" alt="hero" className="hidden sm:block w-32 h-24 object-cover rounded-xl shadow-lg" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {['reported','in-progress','resolved'].map((s) => (
+                      <div key={s} className="bg-white border rounded-2xl p-4 text-center">
+                        <div className="text-xs text-gray-600 mb-1">{s.replace('-', ' ')}</div>
+                        <div className="text-xl font-bold">{issues.filter(i=>i.status===s).length}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <h2 className="font-semibold text-gray-800">Recent Activity</h2>
+                      <button onClick={()=>setView('report')} className="text-sm text-emerald-700">Report an issue →</button>
+                    </div>
+                    {loading ? (
+                      <div className="text-gray-500">Loading…</div>
+                    ) : error ? (
+                      <div className="text-red-600 text-sm">{error}</div>
+                    ) : (
+                      <div className="space-y-3">
+                        {issues.map(issue => (
+                          <div key={issue.id} className="bg-white border rounded-2xl p-4">
+                            <div className="flex gap-3">
+                              <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 border flex-shrink-0">
+                                {issue.photos && issue.photos[0] ? (
+                                  <img src={issue.photos[0]} className="w-full h-full object-cover" alt="issue" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-2xl">{(categories.find(c=>c.id===issue.category)||{}).icon || '❓'}</div>
+                                )}
+                              </div>
+                              <div className="flex-1">
+                                <div className="font-semibold text-gray-800 flex items-center gap-2">
+                                  <span>{(categories.find(c=>c.id===issue.category)||{}).icon || '❓'}</span>
+                                  <span>{issue.title}</span>
+                                </div>
+                                <div className="text-xs text-gray-500 mt-0.5">{issue.location?.address || '—'}</div>
+                                <div className="flex items-center gap-3 mt-2 text-sm text-gray-600">
+                                  <button onClick={()=>upvote(issue.id)} className="px-2 py-1 bg-gray-100 rounded-lg">❤️ {issue.upvotes||0}</button>
+                                  <span className="px-2 py-1 bg-gray-100 rounded-lg">💬 {issue.comments||0}</span>
+                                  <span className={`px-2 py-1 rounded-lg ${issue.status==='resolved'?'bg-emerald-100 text-emerald-700':issue.status==='in-progress'?'bg-blue-100 text-blue-700':'bg-gray-100'}`}>{issue.status}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {view==='report' && (
+                <div className="max-w-2xl mx-auto space-y-4">
+                  <div className="bg-white border rounded-2xl p-4">
+                    <h2 className="font-semibold text-gray-800 mb-3">Report Issue</h2>
+                    <div className="space-y-3">
+                      <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Issue title" className="w-full border rounded-xl px-3 py-2" maxLength={100} />
+                      <textarea value={description} onChange={e=>setDescription(e.target.value)} placeholder="Describe the issue" className="w-full border rounded-xl px-3 py-2 h-24" maxLength={400} />
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {categories.map(cat => (
+                          <button key={cat.id} onClick={()=>setCategory(cat.id)} className={`border rounded-xl px-3 py-2 text-left ${category===cat.id?'border-blue-500 bg-blue-50':'border-gray-200'}`}>
+                            <div className="text-sm font-medium text-gray-800">{cat.icon} {cat.name}</div>
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        {['low','medium','high','critical'].map(p => (
+                          <button key={p} onClick={()=>setPriority(p)} className={`px-3 py-1.5 rounded-lg text-sm ${priority===p?'bg-gray-900 text-white':'bg-gray-100'}`}>{p}</button>
+                        ))}
+                      </div>
+                      <div className="border-2 border-dashed rounded-xl p-4 bg-gray-50">
+                        <div className="text-sm text-gray-700 mb-2">Add Photos</div>
+                        <div className="flex gap-2 mb-2">
+                          <button onClick={()=>document.getElementById('cameraInput').click()} className="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm">📷 Open Camera</button>
+                          <button onClick={()=>document.getElementById('galleryInput').click()} className="px-3 py-2 rounded-lg bg-purple-600 text-white text-sm">🖼️ Gallery</button>
+                        </div>
+                        <input id="cameraInput" type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={e=>handleFiles(e.target.files)} />
+                        <input id="galleryInput" type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e=>handleFiles(e.target.files)} />
+                        {photoUrls.length>0 && (
+                          <div className="grid grid-cols-3 gap-2">
+                            {photoUrls.map((u,idx)=>(
+                              <img key={idx} src={u} className="w-full h-24 object-cover rounded-lg border" alt="preview" />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <button disabled={submitting || !title || !description || !category} onClick={submit} className={`w-full py-3 rounded-2xl font-semibold ${(!title || !description || !category)?'bg-gray-200 text-gray-500':'bg-gradient-to-r from-red-500 to-pink-500 text-white'}`}>{submitting?'Submitting…':'Submit Report'}</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </main>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+  </body>
+</html>
+

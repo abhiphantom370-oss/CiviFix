@@ -1,0 +1,31 @@
+{
+  "name": "workspace",
+  "version": "1.0.0",
+  "description": "This is an application basically used to fix our daily life civic issues that we face it could report the issue its basically finds whether which kind of issue is it and we forward the collected report to the respected department",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "NODE_ENV=development node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/abhiphantom370-oss/CiviFix.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/abhiphantom370-oss/CiviFix/issues"
+  },
+  "homepage": "https://github.com/abhiphantom370-oss/CiviFix#readme",
+  "dependencies": {
+    "@babel/standalone": "^7.28.4",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "morgan": "^1.10.1",
+    "multer": "^2.0.2",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  }
+}
